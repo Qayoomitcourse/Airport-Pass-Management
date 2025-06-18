@@ -1,3 +1,5 @@
+// src/app/database/page.tsx
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
@@ -68,7 +70,8 @@ const formatTablePassId = (pid: string | number | null | undefined): string =>
   String(pid || '0').padStart(4, '0');
 
 export default function DatabasePage() {
-  const { data: _session, status } = useSession();
+  // --- THIS IS THE CORRECTED LINE ---
+  const { status } = useSession();
   const router = useRouter();
 
   const [passes, setPasses] = useState<EmployeePass[]>([]);
