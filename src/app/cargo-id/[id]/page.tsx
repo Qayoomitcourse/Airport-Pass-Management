@@ -145,7 +145,7 @@ export default async function CargoIdPage({ params }: { params: { id: string } }
             ? 'Pass Expired • Contact Administrator for Renewal'
             : 'Safety gear required • ID verification mandatory'}
         </div>
-      </div>
+      </div> 
     </div>
   );
 }
