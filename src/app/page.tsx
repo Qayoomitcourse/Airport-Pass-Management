@@ -1,103 +1,186 @@
-import Image from "next/image";
+// app/page.tsx
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from "@/app/lib/auth";
+import Link from 'next/link'
+import { client } from '@/sanity/lib/client'
+import SignOutButton from '@/app/components/SignOutButton'
 
-export default function Home() {
+// Heroicon imports
+import { PlusCircleIcon, CircleStackIcon, PrinterIcon, ArrowRightIcon, ChartBarIcon } from '@heroicons/react/24/outline'; // <-- FIX: UserIcon removed
+import SignInButton from '@/app/components/SignInButton';
+
+// 1. NEW: Define a type for our counts for better code safety
+interface PassCounts {
+  total: number;
+  cargo: number;
+  landside: number;
+}
+
+// 2. MODIFIED: This new function fetches all counts in a single, efficient query
+async function getPassCountsByCategory(): Promise<PassCounts> {
+  try {
+    // This GROQ query fetches three separate counts and returns them in one object.
+    // IMPORTANT: This assumes you have a field named 'category' in your Sanity schema
+    // with values 'cargo' and 'landside'. If your field is named differently,
+    // e.g., 'passType', change "category" to "passType" in the query below.
+    const query = `
+      {
+        "total": count(*[_type == "employeePass"]),
+        "cargo": count(*[_type == "employeePass" && category == "cargo"]),
+        "landside": count(*[_type == "employeePass" && category == "landside"])
+      }
+    `;
+    
+    const counts = await client.fetch<PassCounts>(query);
+    
+    // Return the fetched counts, or a default object with zeros if something goes wrong
+    return counts || { total: 0, cargo: 0, landside: 0 };
+  } catch (error) {
+    console.error("Failed to fetch pass counts from Sanity:", error);
+    // Return a default object on error
+    return { total: 0, cargo: 0, landside: 0 };
+  }
+}
+
+interface Feature {
+  name: string;
+  href: string;
+  description: string;
+  icon: React.ElementType;
+  bgColorClass: string;
+  textColorClass: string;
+}
+
+interface SessionUser {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+  role?: string | null;
+}
+
+function LoggedOutView() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+      <h1 className="text-4xl font-bold text-slate-800 dark:text-sky-400">Welcome to the Airport Pass System</h1>
+      <p className="mt-4 text-lg text-slate-600 dark:text-slate-400">
+        Please sign in to manage employee passes.
+      </p>
+      <div className="mt-8">
+        <SignInButton />
+      </div>
+    </div>
+  );
+}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+export default async function HomePage() {
+  const session = await getServerSession(authOptions);
+  const user = session?.user as SessionUser | undefined;
+
+  if (!session || !user) {
+    return <LoggedOutView />;
+  }
+
+  // 3. UPDATED: Call the new function and store the result object
+  const passCounts = await getPassCountsByCategory();
+
+  const features: Feature[] = [
+    { 
+      name: 'Add New Pass', 
+      href: '/add-pass',
+      description: 'Create a new employee pass record.',
+      icon: PlusCircleIcon,
+      bgColorClass: 'bg-green-100 dark:bg-green-900/50',
+      textColorClass: 'text-green-600 dark:text-green-400',
+    },
+     { 
+      name: 'Upload Excel Sheet', 
+      href: '/bulk-add-passes',
+      description: 'Create Multiple Passes .',
+      icon: PlusCircleIcon,
+      bgColorClass: 'bg-green-100 dark:bg-green-900/50',
+      textColorClass: 'text-green-600 dark:text-green-400',
+    },
+    { 
+      name: 'View Database', 
+      href: '/database',
+      description: 'Browse, search, and manage all existing passes.',
+      icon: CircleStackIcon,
+      bgColorClass: 'bg-blue-100 dark:bg-blue-900/50',
+      textColorClass: 'text-blue-600 dark:text-blue-400',
+    },
+    { 
+      name: 'ID Card Gallery & Print', 
+      href: '/print-prev',
+      description: 'View, select, and print official ID cards.',
+      icon: PrinterIcon,
+      bgColorClass: 'bg-purple-100 dark:bg-purple-900/50',
+      textColorClass: 'text-purple-600 dark:text-purple-400',
+    },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-200 p-4 sm:p-8">
+       <div className="max-w-7xl mx-auto">
+        <header className="mb-8 md:mb-12 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-800 dark:text-sky-400">
+              Airport Pass Management
+            </h1>
+            <p className="text-slate-600 dark:text-slate-400 text-md mt-1">
+              Welcome, <span className="font-semibold text-sky-600 dark:text-sky-300">{user.name || user.email || 'User'}</span>!
+            </p>
+          </div>
+          <div className="text-right">
+            <SignOutButton />
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+          {features.map((feature) => (
+            <Link
+              key={feature.name}
+              href={feature.href}
+              className="group block transform transition-all duration-300 hover:scale-[1.03]"
+            >
+              <div className="relative h-full p-6 bg-white dark:bg-slate-800/70 rounded-xl shadow-lg dark:shadow-slate-900/50 overflow-hidden border border-slate-200 dark:border-slate-700 hover:border-sky-500/70 dark:hover:border-sky-500/70">
+                <div className={`mb-4 inline-flex items-center justify-center p-3 rounded-lg ${feature.bgColorClass} shadow-sm`}>
+                  <feature.icon className={`w-7 h-7 ${feature.textColorClass}`} />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-700 dark:text-slate-100 mb-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                  {feature.name}
+                </h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+                  {feature.description}
+                </p>
+                <ArrowRightIcon className="w-5 h-5 text-slate-400 dark:text-slate-500 group-hover:text-sky-500 dark:group-hover:text-sky-400 transition-transform duration-300 group-hover:translate-x-1 absolute bottom-6 right-6" />
+              </div>
+            </Link>
+          ))}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* 4. UPDATED: The System Statistics Section */}
+        <div className="p-6 bg-white dark:bg-slate-800/70 rounded-xl shadow-lg dark:shadow-slate-900/50 border border-slate-200 dark:border-slate-700">
+          <div className="flex items-center mb-4">
+            <ChartBarIcon className="w-7 h-7 text-amber-600 dark:text-amber-400 mr-3"/>
+            <h2 className="text-2xl font-semibold text-slate-700 dark:text-slate-100">System Statistics</h2>
+          </div>
+          {/* Use a 3-column grid to display the new stats */}
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Cargo Passes</p>
+              <p className="mt-1 text-3xl font-bold text-blue-600 dark:text-blue-400">{passCounts.cargo}</p>
+            </div>
+            <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Landside Passes</p>
+              <p className="mt-1 text-3xl font-bold text-purple-600 dark:text-purple-400">{passCounts.landside}</p>
+            </div>
+            <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Grand Total Passes</p>
+              <p className="mt-1 text-3xl font-bold text-sky-600 dark:text-sky-400">{passCounts.total}</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
