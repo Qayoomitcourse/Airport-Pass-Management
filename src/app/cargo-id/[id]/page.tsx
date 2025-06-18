@@ -5,13 +5,9 @@ import { EmployeePass } from '@/app/types';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 
-type Props = {
-  params: {
-    id: string;
-  };
-};
+// No separate 'type Props' is needed. We define the type inline below.
 
-export default async function CargoIdPage({ params }: Props) {
+export default async function CargoIdPage({ params }: { params: { id: string } }) {
   const pass = await client.fetch<EmployeePass | null>(
     `*[_type == "employeePass" && _id == $id][0]`,
     { id: params.id }
