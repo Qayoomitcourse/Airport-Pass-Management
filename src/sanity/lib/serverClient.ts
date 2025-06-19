@@ -1,4 +1,5 @@
 
+//sanity/lib/serverClient.ts
 import { createClient } from '@sanity/client'
 
 // Server-side client for write operations

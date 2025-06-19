@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/lib/auth";;
+import { authOptions } from "@/app/lib/auth";
 import { z } from 'zod';
 import { writeClient } from '@/sanity/lib/client';
 import type { SanityAssetDocument } from '@sanity/client';
 
-// Zod schema for validation. Fields are optional for a PATCH operation, except for the ID.
+// Zod schema for validation
 const updatePassSchema = z.object({
   id: z.string().min(1, "Document ID is required for an update."),
   name: z.string().min(3, "Name must be at least 3 characters.").optional(),
@@ -18,12 +18,12 @@ const updatePassSchema = z.object({
   dateOfExpiry: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid expiry date.").optional(),
 });
 
-// Helper function to upload an image to Sanity
+// Upload helper
 async function uploadImageBufferToSanity(buffer: Buffer, filename: string): Promise<SanityAssetDocument> {
   return writeClient.assets.upload('image', buffer, { filename });
 }
 
-// PATCH endpoint to update a pass
+// PATCH handler
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
 
@@ -33,11 +33,12 @@ export async function PATCH(req: NextRequest) {
 
   try {
     const formData = await req.formData();
-
     const dataToValidate: Partial<Record<string, FormDataEntryValue | FormDataEntryValue[]>> = {};
+
     for (const key of updatePassSchema.keyof()._def.values) {
-      if (formData.has(key)) {
-        dataToValidate[key] = key === 'areaAllowed' ? formData.getAll(key) : formData.get(key);
+      const value = key === 'areaAllowed' ? formData.getAll(key) : formData.get(key);
+      if (value !== null) {
+        dataToValidate[key] = value;
       }
     }
 
@@ -51,7 +52,7 @@ export async function PATCH(req: NextRequest) {
 
     const { id, ...updateData } = validationResult.data;
 
-    // Authorization check: Ensure user is admin or the original author of the pass
+    // Authorization
     const passToUpdate = await writeClient.fetch(
       `*[_id == $id][0]{ 'authorId': author._ref }`,
       { id }
@@ -63,15 +64,16 @@ export async function PATCH(req: NextRequest) {
 
     const isAdmin = session.user.role === 'admin';
     const isAuthor = passToUpdate.authorId === session.user.id;
+
     if (!isAdmin && !isAuthor) {
       return NextResponse.json({ error: 'Forbidden: You are not the owner or an admin.' }, { status: 403 });
     }
 
+    // Handle photo
     const photoFile = formData.get('photo') as File | null;
     const patchData: Record<string, unknown> = { ...updateData };
 
-    // Upload and attach photo if provided
-    if (photoFile) {
+    if (photoFile && typeof photoFile === 'object') {
       const photoBuffer = Buffer.from(await photoFile.arrayBuffer());
       const photoAsset = await uploadImageBufferToSanity(photoBuffer, photoFile.name);
       patchData.photo = {
@@ -80,7 +82,7 @@ export async function PATCH(req: NextRequest) {
       };
     }
 
-    // Update the document in Sanity
+    // Patch Sanity document
     const updatedDocument = await writeClient
       .patch(id)
       .set(patchData)
@@ -93,7 +95,6 @@ export async function PATCH(req: NextRequest) {
 
   } catch (error: unknown) {
     console.error("Error in /api/update-pass:", error);
-
     const message = error instanceof Error ? error.message : "An internal server error occurred.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

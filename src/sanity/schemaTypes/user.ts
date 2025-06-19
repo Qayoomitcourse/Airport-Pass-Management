@@ -1,6 +1,4 @@
-// /sanity/schemas/user.ts
-
-import { defineField, defineType } from 'sanity'
+import { defineField, defineType } from 'sanity';
 
 export default defineType({
   name: 'user',
@@ -13,19 +11,31 @@ export default defineType({
       type: 'string',
       validation: (Rule) => Rule.required(),
     }),
-    
-    // --- THIS FIELD HAS BEEN CORRECTED ---
     defineField({
-      name: 'email',
-      title: 'Email',
-      type: 'string',
-      isUnique: true, // The 'unique' check must be a top-level property.
-      validation: (Rule) => [
-        Rule.required(),
-        Rule.email(), // Added email format validation for better data quality.
-      ],
-    }),
+  name: 'email',
+  title: 'Email',
+  type: 'string',
+  validation: (Rule) =>
+    Rule.required()
+      .email()
+      .custom(async (email, context) => {
+        const client = context.getClient?.({ apiVersion: '2023-01-01' });
 
+        // ✅ Defensive checks
+        if (!email || !client || !context.document || !context.document._id) {
+          return true; // Skip validation if required context is missing
+        }
+
+        const id = context.document._id;
+
+        const existingUser = await client.fetch(
+          `*[_type == "user" && email == $email && _id != $id][0]`,
+          { email, id }
+        );
+
+        return existingUser ? 'Email must be unique' : true;
+      }),
+}),
     defineField({
       name: 'image',
       title: 'Image',
@@ -52,8 +62,7 @@ export default defineType({
       title: 'Hashed Password',
       type: 'string',
       description: 'This is for credential-based login. Will be empty for GitHub-only users.',
-      // IMPORTANT: After creating your admin user, change this back to `readOnly: true` for security!
-      readOnly: true, 
+      readOnly: true,
     }),
     defineField({
       name: 'provider',
@@ -63,4 +72,4 @@ export default defineType({
       initialValue: 'credentials',
     }),
   ],
-})
+});

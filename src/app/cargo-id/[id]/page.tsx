@@ -5,12 +5,20 @@ import { EmployeePass } from '@/app/types';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 
-// No separate 'type Props' is needed. We define the type inline below.
+// Updated interface for Next.js 15+ - params is now a Promise
+interface PageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
 
-export default async function CargoIdPage({ params }: { params: { id: string } }) {
+export default async function Page({ params }: PageProps) {
+  // Await the params as required by Next.js 15+
+  const { id } = await params;
+  
   const pass = await client.fetch<EmployeePass | null>(
     `*[_type == "employeePass" && _id == $id][0]`,
-    { id: params.id }
+    { id }
   );
 
   if (!pass) return notFound();
@@ -45,7 +53,6 @@ export default async function CargoIdPage({ params }: { params: { id: string } }
 
         {/* Main Card */}
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200">
-          {/* Header */}
           <div className={`px-6 py-4 ${isExpired ? 'bg-red-700' : 'bg-blue-700'}`}>
             <div className="flex items-center justify-between">
               <div className="flex-1">
@@ -145,7 +152,22 @@ export default async function CargoIdPage({ params }: { params: { id: string } }
             ? 'Pass Expired • Contact Administrator for Renewal'
             : 'Safety gear required • ID verification mandatory'}
         </div>
-      </div> 
+      </div>
     </div>
   );
+}
+
+// Updated generateMetadata function to await params
+export async function generateMetadata({ params }: PageProps) {
+  const { id } = await params;
+  
+  const pass = await client.fetch<EmployeePass | null>(
+    `*[_type == "employeePass" && _id == $id][0]{name}`,
+    { id }
+  );
+
+  return {
+    title: pass?.name ? `${pass.name} - Cargo Access Pass` : 'Cargo Access Pass',
+    description: `Employee access pass for ${pass?.name || 'cargo area'}`,
+  };
 }

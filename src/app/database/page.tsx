@@ -1,11 +1,9 @@
-// src/app/database/page.tsx
-
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { client } from '@/sanity/lib/client';
 import { urlFor } from '@/sanity/lib/image';
-import { EmployeePass, PassCategory } from '@/app/types';
+import { EmployeePass as BaseEmployeePass, PassCategory } from '@/app/types';
 import Image from 'next/image';
 import Link from 'next/link';
 import { format } from 'date-fns';
@@ -14,7 +12,17 @@ import { useRouter } from 'next/navigation';
 
 const PLACEHOLDER_AVATAR_URL = '/placeholder-avatar.png';
 
-// --- Helper Components ---
+// Extend EmployeePass to include optional author
+type EmployeePass = BaseEmployeePass & {
+  author?: {
+    _ref?: string;
+    name?: string;
+  };
+};
+
+type DeleteState = { isDeleting: boolean; deletingId: string | null };
+
+// Helper component
 function ActionsCell({ pass, onDelete, deleteState }: {
   pass: EmployeePass;
   onDelete: (passId: string, passName: string) => Promise<void>;
@@ -30,8 +38,11 @@ function ActionsCell({ pass, onDelete, deleteState }: {
         <Link href={pass.category === 'cargo' ? `/cargo-id/${pass._id}` : `/landside-id/${pass._id}`} className="text-indigo-600 hover:text-indigo-800">View</Link>
         <Link href={`/add-pass?edit=${pass._id}`} className="text-green-600 hover:text-green-800">Edit</Link>
         {canDelete && (
-          <button onClick={() => onDelete(pass._id, pass.name)} disabled={deleteState.isDeleting}
-            className={`text-red-600 hover:text-red-800 disabled:opacity-50 ${isCurrentlyDeleting ? 'animate-pulse' : ''}`}>
+          <button
+            onClick={() => onDelete(pass._id, pass.name)}
+            disabled={deleteState.isDeleting}
+            className={`text-red-600 hover:text-red-800 disabled:opacity-50 ${isCurrentlyDeleting ? 'animate-pulse' : ''}`}
+          >
             {isCurrentlyDeleting ? 'Deleting...' : 'Delete'}
           </button>
         )}
@@ -40,6 +51,7 @@ function ActionsCell({ pass, onDelete, deleteState }: {
   );
 }
 
+// Error + Skeleton components
 function ErrorDisplay({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
     <div className="text-center py-10 text-red-600">
@@ -53,8 +65,7 @@ function LoadingSkeleton() {
   return <div className="text-center py-10">Loading...</div>;
 }
 
-type DeleteState = { isDeleting: boolean; deletingId: string | null };
-
+// Fetch data
 async function fetchPasses(): Promise<EmployeePass[]> {
   const query = `*[_type == "employeePass"] | order(_createdAt desc) { ..., "author": author->{_id, name} }`;
   try {
@@ -69,8 +80,8 @@ async function fetchPasses(): Promise<EmployeePass[]> {
 const formatTablePassId = (pid: string | number | null | undefined): string =>
   String(pid || '0').padStart(4, '0');
 
+// Main component
 export default function DatabasePage() {
-  // --- THIS IS THE CORRECTED LINE ---
   const { status } = useSession();
   const router = useRouter();
 

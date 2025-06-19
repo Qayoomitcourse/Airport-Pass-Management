@@ -10,8 +10,11 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@sanity/client": "^7.6.0",
+    "@sanity/color": "^3.0.6",
     "@sanity/image-url": "^1.1.0",
     "@sanity/vision": "^3.93.0",
+    "@sanity/visual-editing": "^2.12.14",
     "bcryptjs": "^3.0.2",
     "next": "15.3.3",
     "next-auth": "^4.24.11",
