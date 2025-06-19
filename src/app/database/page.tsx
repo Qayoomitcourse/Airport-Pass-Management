@@ -1,7 +1,8 @@
+// /app/database/page.tsx (UPDATED)
+
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { client } from '@/sanity/lib/client';
 import { urlFor } from '@/sanity/lib/image';
 import { EmployeePass as BaseEmployeePass, PassCategory } from '@/app/types';
 import Image from 'next/image';
@@ -25,7 +26,6 @@ type DeleteState = { isDeleting: boolean; deletingId: string | null };
 function getImageUrl(photo: string | SanityImageSource | null | undefined): string {
   if (!photo) return PLACEHOLDER_AVATAR_URL;
   if (typeof photo === 'string') return photo;
-
   try {
     return urlFor(photo).width(40).height(40).fit('crop').url();
   } catch {
@@ -33,6 +33,7 @@ function getImageUrl(photo: string | SanityImageSource | null | undefined): stri
   }
 }
 
+// --- THIS IS THE KEY CHANGE FOR THIS FILE ---
 function ActionsCell({ pass, onDelete, deleteState }: {
   pass: EmployeePass;
   onDelete: (passId: string, passName: string) => Promise<void>;
@@ -42,11 +43,18 @@ function ActionsCell({ pass, onDelete, deleteState }: {
   const canDelete = session?.user?.role === 'admin' || session?.user?.id === pass.author?._ref;
   const isCurrentlyDeleting = deleteState.isDeleting && deleteState.deletingId === pass._id;
 
+  // Use the passId for the view link, but the _id for edits and deletes
+  const viewId = String(pass.passId || pass._id); // Fallback to _id just in case
+
   return (
     <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
       <div className="flex items-center space-x-2">
-        <Link href={pass.category === 'cargo' ? `/cargo-id/${pass._id}` : `/landside-id/${pass._id}`} className="text-indigo-600 hover:text-indigo-800">View</Link>
+        {/* UPDATED LINK: Uses the human-readable passId */}
+        <Link href={pass.category === 'cargo' ? `/cargo-id/${viewId}` : `/landside-id/${viewId}`} className="text-indigo-600 hover:text-indigo-800">View</Link>
+        
+        {/* These links correctly use the unique _id */}
         <Link href={`/add-pass?edit=${pass._id}`} className="text-green-600 hover:text-green-800">Edit</Link>
+        
         {canDelete && (
           <button
             onClick={() => onDelete(pass._id, pass.name)}
@@ -60,6 +68,7 @@ function ActionsCell({ pass, onDelete, deleteState }: {
     </td>
   );
 }
+// --- END OF KEY CHANGE ---
 
 function ErrorDisplay({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
@@ -75,13 +84,36 @@ function LoadingSkeleton() {
 }
 
 async function fetchPasses(): Promise<EmployeePass[]> {
-  const query = `*[_type == "employeePass"] | order(_createdAt desc) { ..., "author": author->{_id, name} }`;
   try {
-    const passes = await client.fetch<EmployeePass[]>(query);
-    return passes || [];
+    const response = await fetch('/api/get-passes', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to fetch passes: ${response.status} ${errorText}`);
+    }
+    const fetched: EmployeePass[] = await response.json();
+    const seen = new Set<string>();
+    const uniquePasses: EmployeePass[] = [];
+    const duplicates: EmployeePass[] = [];
+    for (const pass of fetched) {
+      const key = `${pass.category}-${pass.passId}`;
+      if (seen.has(key)) {
+        duplicates.push(pass);
+      } else {
+        seen.add(key);
+        uniquePasses.push(pass);
+      }
+    }
+    if (duplicates.length > 0) {
+      console.warn('🚫 Duplicate passIds detected:', duplicates.map(p => `${p.category}-${p.passId}`));
+    }
+    return uniquePasses;
   } catch (error) {
-    console.error("Failed to fetch passes:", error);
-    throw new Error('Unable to load employee passes.');
+    console.error("Fetch error:", error);
+    throw new Error('Unable to load passes. Check your connection.');
   }
 }
 
@@ -91,7 +123,6 @@ const formatTablePassId = (pid: string | number | null | undefined): string =>
 export default function DatabasePage() {
   const { status } = useSession();
   const router = useRouter();
-
   const [passes, setPasses] = useState<EmployeePass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,17 +133,17 @@ export default function DatabasePage() {
     setLoading(true);
     setError(null);
     try {
-      const fetchedPasses = await fetchPasses();
-      setPasses(fetchedPasses);
+      const fetched = await fetchPasses();
+      setPasses(fetched);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load data.");
+      setError(err instanceof Error ? err.message : 'Unexpected error');
     } finally {
       setLoading(false);
     }
   }, []);
 
   const handleDelete = useCallback(async (passId: string, passName: string) => {
-    if (!confirm(`Are you sure you want to delete pass for ${passName}?`)) return;
+    if (!confirm(`Delete pass for ${passName}?`)) return;
     try {
       setDeleteState({ isDeleting: true, deletingId: passId });
       const res = await fetch(`/api/delete-pass`, {
@@ -120,12 +151,9 @@ export default function DatabasePage() {
         body: JSON.stringify({ id: passId }),
         headers: { 'Content-Type': 'application/json' },
       });
-
       if (!res.ok) throw new Error("Failed to delete pass");
-
       setPasses(prev => prev.filter(p => p._id !== passId));
-    } catch (err) {
-      console.error(err);
+    } catch {
       alert("An error occurred while deleting the pass.");
     } finally {
       setDeleteState({ isDeleting: false, deletingId: null });
@@ -145,15 +173,15 @@ export default function DatabasePage() {
     if (filters.search) {
       const searchTerm = filters.search.toLowerCase().trim();
       results = results.filter(pass => {
-        const searchFields = [
+        const fields = [
           pass.name,
           pass.organization,
           pass.designation,
           pass.cnic?.replace(/-/g, ''),
           pass.author?.name,
-          Array.isArray(pass.areaAllowed) ? pass.areaAllowed.join(' ') : null
-        ].filter(Boolean);
-        return searchFields.some(field => field?.toLowerCase().includes(searchTerm));
+          Array.isArray(pass.areaAllowed) ? pass.areaAllowed.join(' ') : ''
+        ];
+        return fields.some(field => field?.toLowerCase().includes(searchTerm));
       });
     }
     return results;
@@ -161,7 +189,6 @@ export default function DatabasePage() {
 
   const updateCategoryFilter = (category: PassCategory | 'all') =>
     setFilters(prev => ({ ...prev, category }));
-
   const updateSearchFilter = (search: string) =>
     setFilters(prev => ({ ...prev, search }));
 
@@ -182,29 +209,24 @@ export default function DatabasePage() {
           </Link>
         </div>
         <div className="flex items-center space-x-4">
-          <div className="flex-grow">
-            <input
-              type="search"
-              placeholder="Search..."
-              value={filters.search}
-              onChange={(e) => updateSearchFilter(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md text-sm"
-            />
-          </div>
-          <div>
-            <select
-              value={filters.category}
-              onChange={(e) => updateCategoryFilter(e.target.value as PassCategory | 'all')}
-              className="p-2 border border-gray-300 rounded-md text-sm"
-            >
-              <option value="all">All Categories</option>
-              <option value="cargo">Cargo</option>
-              <option value="landside">Landside</option>
-            </select>
-          </div>
+          <input
+            type="search"
+            placeholder="Search..."
+            value={filters.search}
+            onChange={(e) => updateSearchFilter(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-md text-sm"
+          />
+          <select
+            value={filters.category}
+            onChange={(e) => updateCategoryFilter(e.target.value as PassCategory | 'all')}
+            className="p-2 border border-gray-300 rounded-md text-sm"
+          >
+            <option value="all">All Categories</option>
+            <option value="cargo">Cargo</option>
+            <option value="landside">Landside</option>
+          </select>
         </div>
       </div>
-
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -220,22 +242,12 @@ export default function DatabasePage() {
                 <tr key={pass._id} className="hover:bg-gray-50">
                   <td className="px-4 py-3"><span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 capitalize">{pass.category}</span></td>
                   <td className="px-4 py-3 font-medium">{formatTablePassId(pass.passId)}</td>
-                  <td className="px-4 py-3">
-                    <Image
-                      src={getImageUrl(pass.photo)}
-                      alt={`${pass.name}'s photo`}
-                      width={40}
-                      height={40}
-                      className="rounded-full object-cover"
-                    />
-                  </td>
+                  <td className="px-4 py-3"><Image src={getImageUrl(pass.photo)} alt={`${pass.name}'s photo`} width={40} height={40} className="rounded-full object-cover"/></td>
                   <td className="px-4 py-3 font-medium">{pass.name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{pass.designation || 'N/A'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{pass.organization || 'N/A'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500 font-mono">{pass.cnic || 'N/A'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
-                    {Array.isArray(pass.areaAllowed) && pass.areaAllowed.length > 0 ? pass.areaAllowed.join(', ') : 'N/A'}
-                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{pass.designation}</td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{pass.organization}</td>
+                  <td className="px-4 py-3 text-sm text-gray-500 font-mono">{pass.cnic}</td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{pass.areaAllowed?.join(', ')}</td>
                   <td className="px-4 py-3 text-sm">{pass.dateOfEntry ? format(new Date(pass.dateOfEntry), 'dd-MM-yyyy') : 'N/A'}</td>
                   <td className="px-4 py-3 text-sm">{pass.dateOfExpiry ? format(new Date(pass.dateOfExpiry), 'dd-MM-yyyy') : 'N/A'}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">{pass.author?.name || 'System'}</td>

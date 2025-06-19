@@ -1,11 +1,12 @@
-// app/cargo-id/[id]/page.tsx
-import { client } from '@/sanity/lib/client';
+// app/cargo-id/[id]/page.tsx (DEFINITIVELY CORRECTED)
+
+import { client } from '@/sanity/lib/client'; 
 import { urlFor } from '@/sanity/lib/image';
 import { EmployeePass } from '@/app/types';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 
-// Updated interface for Next.js 15+ - params is now a Promise
+// FIX 1: Restore the PageProps to expect a Promise for params
 interface PageProps {
   params: Promise<{
     id: string;
@@ -13,11 +14,12 @@ interface PageProps {
 }
 
 export default async function Page({ params }: PageProps) {
-  // Await the params as required by Next.js 15+
+  // FIX 2: Restore the 'await' to correctly get the id from the Promise
   const { id } = await params;
   
+  // This part remains correct: Fetch by 'passId'
   const pass = await client.fetch<EmployeePass | null>(
-    `*[_type == "employeePass" && _id == $id][0]`,
+    `*[_type == "employeePass" && passId == $id][0]`,
     { id }
   );
 
@@ -157,12 +159,14 @@ export default async function Page({ params }: PageProps) {
   );
 }
 
-// Updated generateMetadata function to await params
+
 export async function generateMetadata({ params }: PageProps) {
+  // FIX 3: Restore the 'await' here as well
   const { id } = await params;
   
+  // This query remains correct
   const pass = await client.fetch<EmployeePass | null>(
-    `*[_type == "employeePass" && _id == $id][0]{name}`,
+    `*[_type == "employeePass" && passId == $id][0]{name}`,
     { id }
   );
 

@@ -1,10 +1,12 @@
-// app/landside-id/[id]/page.tsx
+// app/landside-id/[id]/page.tsx (DEFINITIVELY CORRECTED)
+
 import { client } from '@/sanity/lib/client';
 import { urlFor } from '@/sanity/lib/image';
 import { EmployeePass } from '@/app/types';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 
+// FIX 1: Restore the PageProps to expect a Promise for params
 interface PageProps {
   params: Promise<{
     id: string;
@@ -12,11 +14,13 @@ interface PageProps {
 }
 
 export default async function Page({ params }: PageProps) {
+  // FIX 2: Restore the 'await' to correctly get the id from the Promise
   const { id } = await params;
 
+  // This query is correct: Fetch by 'passId' instead of '_id'
   const pass = await client.fetch<EmployeePass | null>(
-    `*[_type == "employeePass" && _id == $id][0]`,
-    { id }
+    `*[_type == "employeePass" && passId == $id][0]`,
+    { id } 
   );
 
   if (!pass) return notFound();
@@ -155,12 +159,14 @@ export default async function Page({ params }: PageProps) {
   );
 }
 
-// Metadata function
+
 export async function generateMetadata({ params }: PageProps) {
+  // FIX 3: Restore the 'await' here as well
   const { id } = await params;
 
+  // This query remains correct
   const pass = await client.fetch<EmployeePass | null>(
-    `*[_type == "employeePass" && _id == $id][0]{name}`,
+    `*[_type == "employeePass" && passId == $id][0]{name}`,
     { id }
   );
 

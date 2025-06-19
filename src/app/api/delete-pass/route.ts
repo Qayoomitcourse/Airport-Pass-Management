@@ -2,11 +2,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serverWriteClient } from '@/sanity/lib/serverClient';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from "@/app/lib/auth";;
+import { authOptions } from "@/app/lib/auth";
 
 export const dynamic = 'force-dynamic';
 
-export async function DELETE(request: NextRequest) {
+// Changed from DELETE to POST to match frontend request
+export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user) {
@@ -54,14 +55,14 @@ export async function DELETE(request: NextRequest) {
     await serverWriteClient.delete(passIdToDelete);
 
     return NextResponse.json({ success: true, message: `Pass ${passIdToDelete} deleted.` });
-  } catch (error: unknown) { // <-- FIX: Changed 'any' to 'unknown'
+  } catch (error: unknown) {
     console.error('Delete API error:', error);
     
     // Safely determine the error details
     const details = error instanceof Error ? error.message : String(error);
 
     return NextResponse.json(
-      { error: 'Internal server error.', details }, // <-- Use the safely determined details
+      { error: 'Internal server error.', details },
       { status: 500 }
     );
   }

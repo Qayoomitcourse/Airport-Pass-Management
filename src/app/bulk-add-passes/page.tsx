@@ -1,4 +1,4 @@
-// /app/bulk-add-passes/page.tsx
+// /app/bulk-add-passes/page.tsx (FINAL VERSION)
 
 "use client";
 import { useState, ChangeEvent, FormEvent, useEffect } from 'react';
@@ -7,9 +7,7 @@ import { useSession } from 'next-auth/react';
 import * as XLSX from 'xlsx';
 import Link from 'next/link';
 
-// --- INTERFACE ---
 interface TargetPassData {
-  passId?: number;
   name?: string;
   category?: string;
   designation?: string;
@@ -24,12 +22,12 @@ interface ImportResult {
   row: number;
   status: string;
   message: string;
+  documentId?: string; 
   passId?: number;
-  documentId?: string;
 }
 
 export default function BulkAddPassesPage() {
-  const { status } = useSession(); // ✅ Removed unused `session`
+  const { status } = useSession();
   const router = useRouter();
 
   const [file, setFile] = useState<File | null>(null);
@@ -69,7 +67,7 @@ export default function BulkAddPassesPage() {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!file) {
-      setError("Please select an Excel file to upload.");
+      setError("Please select a file to upload.");
       return;
     }
     setIsProcessing(true);
@@ -81,7 +79,7 @@ export default function BulkAddPassesPage() {
     reader.onload = async (event: ProgressEvent<FileReader>) => {
       try {
         const binaryStr = event.target?.result;
-        if (!binaryStr || typeof binaryStr !== 'string') throw new Error("Could not read file data.");
+        if (!binaryStr) throw new Error("Could not read file data.");
 
         const workbook = XLSX.read(binaryStr, { type: 'binary', cellDates: true });
         const firstSheetName = workbook.SheetNames[0];
@@ -94,7 +92,6 @@ export default function BulkAddPassesPage() {
         const dataRows = jsonData.slice(1);
 
         const expectedHeadersMap: { [key: string]: keyof TargetPassData } = {
-          'passid': 'passId',
           'name': 'name',
           'category': 'category',
           'designation': 'designation',
@@ -105,7 +102,7 @@ export default function BulkAddPassesPage() {
           'dateofexpiry': 'dateOfExpiry',
         };
 
-        const requiredHeaders = ['passid', 'name', 'category', 'designation', 'organization', 'cnic', 'dateofentry', 'dateofexpiry'];
+        const requiredHeaders = ['name', 'category', 'designation', 'organization', 'cnic', 'dateofentry', 'dateofexpiry'];
         const missingHeaders = requiredHeaders.filter(h => !headers.includes(h.replace(/\s+/g, '')));
         if (missingHeaders.length > 0) {
           throw new Error(`Missing required columns: ${missingHeaders.join(', ')}.`);
@@ -121,18 +118,17 @@ export default function BulkAddPassesPage() {
 
               if ((targetKey === 'dateOfEntry' || targetKey === 'dateOfExpiry') && cellValue instanceof Date) {
                 rowObject[targetKey] = formatDate(cellValue);
-              } else if (targetKey === 'passId') {
-                rowObject[targetKey] = Number(cellValue);
               } else if (cellValue != null) {
                 rowObject[targetKey] = String(cellValue).trim();
               }
             }
           });
           return rowObject as TargetPassData;
-        }).filter(obj => obj.passId && obj.name && obj.cnic);
+        })
+        .filter(obj => obj.name && obj.cnic);
 
         if (passesToUpload.length === 0) {
-          throw new Error("No valid data rows with a Pass ID, Name, and CNIC found in the Excel sheet.");
+          throw new Error("No valid data rows with a Name and CNIC found in the Excel sheet.");
         }
 
         const response = await fetch('/api/bulk-add-passes', {
@@ -168,20 +164,19 @@ export default function BulkAddPassesPage() {
     <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-md my-8">
       <h1 className="text-2xl font-bold text-gray-700 mb-6">Bulk Add Employee Passes</h1>
       
-      {/* --- UPDATED INSTRUCTIONS --- */}
       <div className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-md text-sm text-blue-700">
-        <p className="font-semibold mb-2">Process:</p>
+        <p className="font-semibold mb-2">Instructions:</p>
         <ol className="list-decimal list-inside space-y-2">
-            <li>First, <Link href="/dashboard/upload-photos" className="font-medium text-blue-600 hover:underline">upload all photos</Link>. Name each photo file with the unique **Pass ID** you will assign (e.g., <code className="bg-blue-100 p-0.5 rounded">1051.jpg</code>).</li>
-            <li>Download the Excel template below.</li>
-            <li>Fill in the sheet. The **Pass ID** in the Excel file must match the photo filenames.</li>
-            <li>Upload the completed Excel file here to create the passes.</li>
+            {/* --- THE FIX IS HERE: I've removed the quotes entirely --- */}
+            <li>Download the simplified Excel template below. It does not have a Pass ID column.</li>
+            <li>Fill in the details for each employee in the sheet.</li>
+            <li>Upload the completed Excel file here. The system will create new pass entries and automatically assign a unique ID to each.</li>
+            <li>After processing, you can find the new passes in the dashboard to manage them and upload their photos individually.</li>
         </ol>
         <div className="mt-4">
-          {/* --- UPDATED DOWNLOAD LINK --- */}
-          <a href="/excel-templates/pass_upload_template_with_passid.xlsx" download
+          <a href="/excel-templates/pass_upload_template.xlsx" download
              className="text-blue-600 hover:text-blue-800 font-medium underline">
-            Download Excel Template (with Pass ID)
+            Download Excel Template
           </a>
         </div>
       </div>
@@ -195,7 +190,7 @@ export default function BulkAddPassesPage() {
             <input type="file" name="excelFile" id="excelFile" accept=".xlsx, .xls, .csv" onChange={handleFileChange} required className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
         </div>
         <button type="submit" disabled={isProcessing || !file} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400">
-            {isProcessing ? 'Processing File...' : 'Upload and Process Pass Data'}
+            {isProcessing ? 'Processing File...' : 'Upload and Create Passes'}
         </button>
       </form>
 
@@ -206,10 +201,18 @@ export default function BulkAddPassesPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Row #</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pass ID</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Row #
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Details
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Generated ID
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -222,7 +225,7 @@ export default function BulkAddPassesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-700 break-words">{result.message}</td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">{result.passId || 'N/A'}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700 font-mono">{result.documentId || 'N/A'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -232,7 +235,7 @@ export default function BulkAddPassesPage() {
       )}
 
       <div className="mt-8 text-center">
-          <Link href="/add-pass" className="text-blue-600 hover:text-blue-800">← Back to Single Pass Entry</Link>
+          <Link href="/dashboard" className="text-blue-600 hover:text-blue-800">← Back to Dashboard</Link>
       </div>
     </div>
   );
