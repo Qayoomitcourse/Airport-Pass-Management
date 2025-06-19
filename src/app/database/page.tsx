@@ -9,10 +9,10 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import type { SanityImageSource } from '@sanity/image-url/lib/types/types';
 
 const PLACEHOLDER_AVATAR_URL = '/placeholder-avatar.png';
 
-// Extend EmployeePass to include optional author
 type EmployeePass = BaseEmployeePass & {
   author?: {
     _ref?: string;
@@ -22,7 +22,17 @@ type EmployeePass = BaseEmployeePass & {
 
 type DeleteState = { isDeleting: boolean; deletingId: string | null };
 
-// Helper component
+function getImageUrl(photo: string | SanityImageSource | null | undefined): string {
+  if (!photo) return PLACEHOLDER_AVATAR_URL;
+  if (typeof photo === 'string') return photo;
+
+  try {
+    return urlFor(photo).width(40).height(40).fit('crop').url();
+  } catch {
+    return PLACEHOLDER_AVATAR_URL;
+  }
+}
+
 function ActionsCell({ pass, onDelete, deleteState }: {
   pass: EmployeePass;
   onDelete: (passId: string, passName: string) => Promise<void>;
@@ -51,7 +61,6 @@ function ActionsCell({ pass, onDelete, deleteState }: {
   );
 }
 
-// Error + Skeleton components
 function ErrorDisplay({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
     <div className="text-center py-10 text-red-600">
@@ -65,7 +74,6 @@ function LoadingSkeleton() {
   return <div className="text-center py-10">Loading...</div>;
 }
 
-// Fetch data
 async function fetchPasses(): Promise<EmployeePass[]> {
   const query = `*[_type == "employeePass"] | order(_createdAt desc) { ..., "author": author->{_id, name} }`;
   try {
@@ -80,7 +88,6 @@ async function fetchPasses(): Promise<EmployeePass[]> {
 const formatTablePassId = (pid: string | number | null | undefined): string =>
   String(pid || '0').padStart(4, '0');
 
-// Main component
 export default function DatabasePage() {
   const { status } = useSession();
   const router = useRouter();
@@ -215,8 +222,11 @@ export default function DatabasePage() {
                   <td className="px-4 py-3 font-medium">{formatTablePassId(pass.passId)}</td>
                   <td className="px-4 py-3">
                     <Image
-                      src={pass.photo ? urlFor(pass.photo).width(40).height(40).fit('crop').url() : PLACEHOLDER_AVATAR_URL}
-                      alt={`${pass.name}'s photo`} width={40} height={40} className="rounded-full object-cover"
+                      src={getImageUrl(pass.photo)}
+                      alt={`${pass.name}'s photo`}
+                      width={40}
+                      height={40}
+                      className="rounded-full object-cover"
                     />
                   </td>
                   <td className="px-4 py-3 font-medium">{pass.name}</td>
