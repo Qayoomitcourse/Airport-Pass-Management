@@ -1,83 +1,67 @@
-// app/api/get-passes-by-ids/route.ts
+// /app/api/get-passes-by-ids/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { client } from '@/sanity/lib/client';
-// No longer need urlFor, as the query will handle the image URL directly.
+import { serverWriteClient } from '@/sanity/lib/serverClient';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from "@/app/lib/auth";
+import { z } from 'zod';
 
-// This interface reflects the data we will return from the API
-interface EmployeePrintData {
-  _id: string;
-  passId: string;
-  name: string;
-  designation: string;
-  organization: string;
-  cnic: string;
-  dateOfExpiry: string;
-  category: 'cargo' | 'landside';
-  photo?: string | null; // The query will transform the photo asset to a URL string
-  areaAllowed?: string[];
-}
+// Zod schema to validate the incoming request
+const requestSchema = z.object({
+  passIds: z.array(z.string().or(z.number())).min(1, "At least one Pass ID is required."),
+  category: z.enum(['cargo', 'landside']),
+});
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const { passIds, category } = await request.json();
-
-    // --- Input Validation (Your existing validation is great) ---
-    if (!passIds || !Array.isArray(passIds) || passIds.length === 0) {
-      return NextResponse.json({ error: 'Pass IDs are required and must be a non-empty array' }, { status: 400 });
-    }
-    if (!category || !['cargo', 'landside'].includes(category)) {
-      return NextResponse.json({ error: 'A valid category ("cargo" or "landside") is required' }, { status: 400 });
-    }
-    if (passIds.length > 6) {
-      return NextResponse.json({ error: 'You can print a maximum of 6 cards at a time.' }, { status: 400 });
+    const validation = requestSchema.safeParse(await request.json());
+    if (!validation.success) {
+      return NextResponse.json({ error: "Invalid request body", details: validation.error.flatten() }, { status: 400 });
     }
 
-    // --- OPTIMIZED GROQ QUERY ---
-    // 1. We assume passId is a string in Sanity, simplifying the filter.
-    // 2. We project the photo asset directly to its URL using `photo.asset->url`.
-    //    This is more efficient than fetching the asset reference and processing it later.
+    const { category } = validation.data;
+    // Sanity stores passId as a number, so we must convert the incoming strings to numbers for the query
+    const numericPassIds = validation.data.passIds.map(id => Number(id));
+
+    // A powerful GROQ query to fetch all matching passes in one go
+    // The `...` spreads all top-level fields
+    // The `photo` field is projected to get the full image URL
+    // The `passId` is explicitly included
     const query = `
-      *[_type == "employeePass" && category == $category && passId in $passIds]{
-        _id,
-        passId,
-        name,
-        designation,
-        organization,
-        cnic,
-        dateOfExpiry,
-        category,
-        "photo": photo.asset->url, // This gets the direct image URL
-        areaAllowed
+      *[_type == "employeePass" && category == $category && passId in $numericPassIds] {
+        ...,
+        "photo": photo.asset->url,
+        passId
       }
     `;
 
-    // The parameters for the query are simpler now
     const params = {
-      category: category,
-      passIds: passIds.map(id => String(id)), // Ensure all IDs are strings for the query
+      category,
+      numericPassIds,
     };
 
-    // Execute the query
-    const employees = await client.fetch<EmployeePrintData[]>(query, params);
+    const employees = await serverWriteClient.fetch(query, params);
 
-    // --- MORE EFFICIENT "NOT FOUND" CALCULATION ---
-    // Using a Set for lookups is much faster than Array.includes() for larger lists.
-    const foundIds = new Set(employees.map(emp => emp.passId));
-    const notFoundIds = passIds.filter(id => !foundIds.has(String(id)));
+    // Determine which IDs were found and which were not
+    const foundIds = new Set(employees.map((emp: { passId: number }) => String(emp.passId)));
+    const requestedIds = new Set(validation.data.passIds.map(id => String(id)));
+    
+    const notFoundIds = Array.from(requestedIds).filter(id => !foundIds.has(id));
 
-    // --- CLEANED RESPONSE ---
     return NextResponse.json({
-      employees: employees, // The data is already processed by the query
-      notFoundIds: notFoundIds,
-      totalFound: employees.length
+      employees,
+      notFoundIds,
+      totalFound: employees.length,
     });
 
   } catch (error) {
-    console.error('Error in /api/get-passes-by-ids:', error);
-    return NextResponse.json(
-      { error: 'An internal server error occurred while fetching passes.' },
-      { status: 500 }
-    );
+    console.error('Error fetching passes by IDs:', error);
+    const errorMessage = error instanceof Error ? error.message : "An internal server error occurred.";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
