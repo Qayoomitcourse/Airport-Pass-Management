@@ -11,7 +11,7 @@ export async function middleware(req: NextRequest) {
   // Get the path the user is trying to access
   const { pathname } = req.nextUrl;
 
-  // --- DEFINE YOUR PUBLIC PATHS ---
+  // --- DEFINE YOUR PUBLIC PATHS (accessible without authentication) ---
   const publicPaths = [
     '/cargo-id',   
     '/landside-id', 
@@ -33,31 +33,89 @@ export async function middleware(req: NextRequest) {
   }
 
   // ===================================================================
-  // --- NEW ROLE-BASED ACCESS CHECKS ---
+  // --- ROLE-BASED ACCESS CONTROL ---
   // At this point, we know the user is logged in.
   // ===================================================================
 
-  // 1. Define the roles that can access the editor pages
-  const authorizedRolesForEditorPages = ['admin', 'editor'];
+  const userRole = token.role as string;
 
-  // 2. Define the editor-specific pages
-  const isEditorPage = pathname.startsWith('/add-pass') || pathname.startsWith('/database');
+  // --- SANITY STUDIO SPECIFIC ACCESS CONTROL ---
+  // Check for Sanity Studio access first (more specific than general admin check)
+  if (pathname.startsWith('/studio') || pathname.startsWith('/admin/studio') || pathname.startsWith('/cms') || pathname.startsWith('/sanity')) {
+    // Only allow admin or specific CMS editors to access Sanity Studio
+    if (!['admin', 'cms-editor', 'content-manager'].includes(userRole)) {
+      const url = new URL('/unauthorized', req.url);
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
 
-  // 3. Check if the user is trying to access an editor page
-  if (isEditorPage) {
-    // If they are on an editor page, check if their role is authorized
-    if (!authorizedRolesForEditorPages.includes(token.role as string)) {
-      // If their role is not 'admin' or 'editor', redirect them.
-      // You can redirect to an "unauthorized" page or the home page.
-      const url = new URL('/unauthorized', req.url); 
+  // --- ADMIN FULL ACCESS ---
+  // Admins have access to everything (except Sanity Studio which is handled above)
+  if (userRole === 'admin') {
+    return NextResponse.next();
+  }
+
+  // --- USER RESTRICTED ACCESS ---
+  // Regular users can only access add-pass and database (no delete functionality)
+  
+  // 1. Define paths that users can access
+  const userAllowedPaths = [
+    '/add-pass',
+    '/database',
+    '/profile',        // Allow profile access
+    '/dashboard',      // Allow dashboard access if you have one
+    '/unauthorized'    // Allow unauthorized page access
+  ];
+
+  // 2. Define paths that contain delete functionality (admin only)
+  const deleteRestrictedPaths = [
+    '/api/delete',
+    '/delete',
+    '/api/remove',
+    '/remove'
+  ];
+
+  // 3. Define admin-only paths (INCLUDING SANITY STUDIO)
+  const adminOnlyPaths = [
+    '/admin',
+    '/settings',
+    '/user-management',
+    '/reports',
+    '/analytics',
+    '/studio',         // Add your Sanity Studio path here
+    '/admin/studio',   // If your studio is at /admin/studio
+    '/cms',           // Alternative common CMS path
+    '/sanity'         // Alternative Sanity path
+  ];
+
+  // 4. Check if user is trying to access delete functionality
+  const isDeletePath = deleteRestrictedPaths.some(path => pathname.startsWith(path));
+  if (isDeletePath && userRole !== 'admin') {
+    const url = new URL('/unauthorized', req.url);
+    return NextResponse.redirect(url);
+  }
+
+  // 5. Check if user is trying to access admin-only paths (INCLUDING SANITY STUDIO)
+  const isAdminPath = adminOnlyPaths.some(path => pathname.startsWith(path));
+  if (isAdminPath && userRole !== 'admin') {
+    const url = new URL('/unauthorized', req.url);
+    return NextResponse.redirect(url);
+  }
+
+  // 6. For non-admin users, check if they're accessing allowed paths
+  if (userRole === 'user' || userRole === 'editor' || userRole === 'cms-editor' || userRole === 'content-manager') {
+    const isAllowedPath = userAllowedPaths.some(path => pathname.startsWith(path));
+    
+    if (!isAllowedPath) {
+      // If user is trying to access a path not in their allowed list, redirect
+      const url = new URL('/unauthorized', req.url);
       return NextResponse.redirect(url);
     }
   }
 
-  // 4. (Optional but recommended) Add specific protection for any other admin-only pages
-  const isAdminPath = pathname.startsWith('/admin'); // Example: an /admin dashboard
-  if (isAdminPath && token.role !== 'admin') {
-    // If a non-admin user tries to access an admin page, redirect them.
+  // 7. If user role is not recognized, redirect to unauthorized
+  if (!['admin', 'user', 'editor', 'cms-editor', 'content-manager'].includes(userRole)) {
     const url = new URL('/unauthorized', req.url);
     return NextResponse.redirect(url);
   }
@@ -68,6 +126,8 @@ export async function middleware(req: NextRequest) {
 
 // --- CONFIGURE WHICH PATHS THE MIDDLEWARE RUNS ON ---
 export const config = {
-  // This matcher is good. It runs on all paths except for static/API assets.
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  // This matcher runs on all paths except for static/API assets and NextAuth routes
+  matcher: [
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.gif$|.*\\.svg$).*)',
+  ],
 };

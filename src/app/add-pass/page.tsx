@@ -117,7 +117,7 @@ function AddPassPage() {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!isEditMode && !photo) { setError("Photo is required for a new pass."); return; }
+    // REMOVED: Photo validation for new passes - now optional
     if (formData.areaAllowed.length === 0) { setError("At least one area must be selected."); return; }
 
     setIsLoading(true);
@@ -133,6 +133,7 @@ function AddPassPage() {
       }
     });
 
+    // Only append photo if one is selected
     if (photo) {
       submissionFormData.append('photo', photo);
     }
@@ -241,9 +242,24 @@ function AddPassPage() {
         </div>
 
         <div>
-          <label htmlFor="photo" className="block text-sm font-medium text-gray-700 mb-1">Photo { !isEditMode && <span className="text-red-500">*</span>}</label>
-          <input type="file" name="photo" id="photo" accept="image/*" onChange={handlePhotoChange} required={!isEditMode} className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
-          {photoPreview && (<div className="mt-4"><p className="text-sm text-gray-600">{isEditMode && !photo ? 'Current Photo:' : 'Preview:'}</p><Image src={photoPreview} alt="Preview" width={150} height={150} className="rounded mt-2 border object-cover" /></div>)}
+          <label htmlFor="photo" className="block text-sm font-medium text-gray-700 mb-1">
+            Photo 
+            <span className="text-gray-500 text-xs ml-1">(Optional - can be added later)</span>
+          </label>
+          <input 
+            type="file" 
+            name="photo" 
+            id="photo" 
+            accept="image/*" 
+            onChange={handlePhotoChange} 
+            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          {photoPreview && (
+            <div className="mt-4">
+              <p className="text-sm text-gray-600">{isEditMode && !photo ? 'Current Photo:' : 'Preview:'}</p>
+              <Image src={photoPreview} alt="Preview" width={150} height={150} className="rounded mt-2 border object-cover" />
+            </div>
+          )}
         </div>
         
         <button type="submit" disabled={isLoading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400">

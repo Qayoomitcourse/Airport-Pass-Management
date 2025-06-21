@@ -43,19 +43,47 @@ export async function POST(req: NextRequest) {
 
     const { data: validatedData } = validationResult;
     const photoFile = formData.get('photo') as File | null;
-    if (!photoFile) {
-      return NextResponse.json({ error: "Photo is required for new passes." }, { status: 400 });
+    
+    // Photo is now optional - removed the required validation
+
+    // *** ADD THIS: Check for duplicate CNIC before creating the document ***
+    const existingPass = await writeClient.fetch(
+      `*[_type == "employeePass" && cnic == $cnic][0]._id`,
+      { cnic: validatedData.cnic }
+    );
+
+    if (existingPass) {
+      return NextResponse.json({ 
+        error: "This CNIC already exists in the system." 
+      }, { status: 400 });
     }
 
+    // *** ADD THIS: Check for duplicate Pass ID (extra safety) ***
     const newPassId = await getNextPassId(validatedData.category);
-    const photoAsset = await writeClient.assets.upload('image', photoFile, { filename: photoFile.name });
+    const existingPassId = await writeClient.fetch(
+      `*[_type == "employeePass" && category == $category && passId == $passId][0]._id`,
+      { category: validatedData.category, passId: newPassId }
+    );
+
+    if (existingPassId) {
+      return NextResponse.json({ 
+        error: `Pass ID ${newPassId} already exists for the '${validatedData.category}' category.` 
+      }, { status: 400 });
+    }
+
+    // Handle photo upload only if a photo is provided
+    let photoAsset = null;
+    if (photoFile && photoFile.size > 0) {
+      photoAsset = await writeClient.assets.upload('image', photoFile, { filename: photoFile.name });
+    }
 
     const passDocument = {
       _type: 'employeePass',
       ...validatedData,
       passId: newPassId,
       author: { _type: 'reference', _ref: session.user.id },
-      photo: { _type: 'image', asset: { _type: 'reference', _ref: photoAsset._id } },
+      // Only add photo field if photo is provided
+      ...(photoAsset && { photo: { _type: 'image', asset: { _type: 'reference', _ref: photoAsset._id } } }),
     };
 
     const createdDocument = await writeClient.create(passDocument);
