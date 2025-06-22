@@ -178,28 +178,49 @@ export default function DatabasePage() {
     else if (status === 'authenticated') loadData();
   }, [status, router, loadData]);
 
-  const handleDelete = useCallback(async (passId: string, passName: string) => {
+const handleDelete = useCallback(async (passId: string, passName: string) => {
     if (!window.confirm(`Are you sure you want to delete the pass for ${passName}? This action cannot be undone.`)) {
         return;
     }
+    
     setDeleteState({ isDeleting: true, deletingId: passId });
     setError(null);
+    
     try {
         const response = await fetch('/api/delete-pass', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: passId }),
         });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Failed to delete pass.');
+
+        // Check if response has content before parsing JSON
+        let result;
+        const text = await response.text();
         
+        if (text) {
+            try {
+                result = JSON.parse(text);
+            } catch (parseError) {
+                throw new Error(`Invalid JSON response: ${text}`);
+            }
+        } else {
+            throw new Error('Empty response from server');
+        }
+
+        if (!response.ok) {
+            throw new Error(result?.error || `Server error: ${response.status} ${response.statusText}`);
+        }
+        
+        // Success - remove the pass from local state
         setPasses(prevPasses => prevPasses.filter(p => p._id !== passId));
+        
     } catch (err) {
+        console.error('Delete error:', err);
         setError(err instanceof Error ? err.message : 'An unknown error occurred during deletion.');
     } finally {
         setDeleteState({ isDeleting: false, deletingId: null });
     }
-  }, []);
+}, []);
 
   const handleBulkDelete = useCallback(async () => {
     const numSelected = selectedPassIds.size;

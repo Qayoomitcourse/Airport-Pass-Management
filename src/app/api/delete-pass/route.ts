@@ -1,5 +1,3 @@
-// /app/api/delete-pass/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { serverWriteClient } from '@/sanity/lib/serverClient';
 import { getServerSession } from 'next-auth/next';
@@ -7,58 +5,56 @@ import { authOptions } from "@/app/lib/auth";
 import { z } from 'zod';
 
 const deleteRequestSchema = z.object({
-  ids: z.array(z.string().min(1)).min(1, "At least one ID is required."),
+  id: z.string().min(1, "Pass ID is required."),
 });
 
-export async function POST(request: NextRequest) {
+export async function DELETE(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const validation = deleteRequestSchema.safeParse(await request.json());
-  if (!validation.success) {
-    return NextResponse.json({ error: "Invalid request body.", details: validation.error.flatten() }, { status: 400 });
+  let requestBody;
+  try {
+    requestBody = await request.json();
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
   }
 
-  const { ids: passIdsToDelete } = validation.data;
+  const validation = deleteRequestSchema.safeParse(requestBody);
+  if (!validation.success) {
+    return NextResponse.json({ 
+      error: "Invalid request body.", 
+      details: validation.error.flatten() 
+    }, { status: 400 });
+  }
+
+  const { id: passId } = validation.data;
   
   try {
-    const passes = await serverWriteClient.fetch<Array<{ _id: string, authorId: string | null }>>(
-      `*[_type == "employeePass" && _id in $passIdsToDelete]{ _id, "authorId": author._ref }`,
-      { passIdsToDelete }
+    const pass = await serverWriteClient.fetch<{ _id: string, authorId: string | null } | null>(
+      `*[_type == "employeePass" && _id == $passId][0]{ _id, "authorId": author._ref }`,
+      { passId }
     );
 
-    if (passes.length === 0) {
-      return NextResponse.json({ error: 'No matching passes found to delete.' }, { status: 404 });
+    if (!pass) {
+      return NextResponse.json({ error: 'Pass not found.' }, { status: 404 });
     }
 
     const isAdmin = session.user.role === 'admin';
-    const permittedIdsToDelete: string[] = [];
+    const isAuthor = pass.authorId === session.user.id;
     
-    for (const pass of passes) {
-      const isAuthor = pass.authorId === session.user.id;
-      if (isAdmin || isAuthor) {
-        permittedIdsToDelete.push(pass._id);
-      }
+    if (!isAdmin && !isAuthor) {
+      return NextResponse.json({ 
+        error: 'Forbidden. You do not have permission to delete this pass.' 
+      }, { status: 403 });
     }
 
-    if (permittedIdsToDelete.length === 0) {
-      return NextResponse.json({ error: 'Forbidden. You do not have permission to delete any of the selected passes.' }, { status: 403 });
-    }
-
-    let transaction = serverWriteClient.transaction();
-    permittedIdsToDelete.forEach(id => {
-      transaction = transaction.delete(id);
-    });
-    
-    await transaction.commit();
-    const skippedCount = passIdsToDelete.length - permittedIdsToDelete.length;
+    await serverWriteClient.delete(passId);
 
     return NextResponse.json({
       success: true,
-      message: `Successfully deleted ${permittedIdsToDelete.length} pass(es).`,
-      details: skippedCount > 0 ? `${skippedCount} pass(es) were skipped due to lack of permissions.` : ''
+      message: 'Pass deleted successfully.'
     });
 
   } catch (error: unknown) {
