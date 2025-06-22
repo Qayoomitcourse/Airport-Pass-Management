@@ -17,7 +17,7 @@ export async function DELETE(request: NextRequest) {
   let requestBody;
   try {
     requestBody = await request.json();
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
   }
 

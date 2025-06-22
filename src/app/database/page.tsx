@@ -200,7 +200,7 @@ const handleDelete = useCallback(async (passId: string, passName: string) => {
         if (text) {
             try {
                 result = JSON.parse(text);
-            } catch (parseError) {
+            } catch {
                 throw new Error(`Invalid JSON response: ${text}`);
             }
         } else {
