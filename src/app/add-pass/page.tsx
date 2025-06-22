@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, ChangeEvent, FormEvent, useEffect, Suspense } from 'react';
+// 1. IMPORT useRef for the file input
+import { useState, ChangeEvent, FormEvent, useEffect, Suspense, useRef } from 'react'; 
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { PassCategory } from '@/app/types';
@@ -8,7 +9,7 @@ import { useSession } from 'next-auth/react';
 import { client } from '@/sanity/lib/client';
 import { urlFor } from '@/sanity/lib/image';
 
-// Wrapper component for useSearchParams to work with Suspense
+// Wrapper component remains the same
 export default function AddPassPageWrapper() {
   return (
     <Suspense fallback={<div className="text-center py-10">Loading Form...</div>}>
@@ -17,7 +18,6 @@ export default function AddPassPageWrapper() {
   );
 }
 
-// FIX 3, Step 1: Define a clear interface for the form data
 interface PassFormData {
   name: string;
   category: PassCategory;
@@ -36,7 +36,6 @@ function AddPassPage() {
   const editId = searchParams.get('edit');
   const isEditMode = !!editId;
 
-  // FIX 3, Step 2: Use the interface for the state
   const [formData, setFormData] = useState<PassFormData>({
     name: '',
     category: 'cargo',
@@ -54,6 +53,12 @@ function AddPassPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // ===================== NEW CODE FOR DRAG-AND-DROP =====================
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // ======================================================================
+
+  // All your useEffect hooks remain the same...
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push('/');
@@ -65,7 +70,6 @@ function AddPassPage() {
       setIsLoading(true);
       const fetchPassData = async () => {
         try {
-          // You could also create a type for the Sanity response for even better safety
           const pass = await client.fetch(`*[_type == "employeePass" && _id == $id][0]`, { id: editId });
           if (pass) {
             setFormData({
@@ -84,7 +88,7 @@ function AddPassPage() {
           } else {
             setError("Pass not found.");
           }
-        } catch { // *** FIX APPLIED HERE ***
+        } catch { 
           setError("Failed to fetch pass data.");
         } finally {
           setIsLoading(false);
@@ -107,17 +111,55 @@ function AddPassPage() {
     });
   };
 
-  const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+  // ===================== REFACTORED AND NEW FILE HANDLERS =====================
+  
+  // 2. Create a reusable function to process the selected file
+  const processFile = (file: File) => {
+    if (file && file.type.startsWith('image/')) {
       setPhoto(file);
       setPhotoPreview(URL.createObjectURL(file));
+      setError(null); // Clear any previous file-related errors
+    } else {
+      setError('Invalid file type. Please upload an image file (e.g., JPG, PNG, WEBP).');
     }
   };
 
+  // Original handler for the hidden input, now simplified
+  const handlePhotoChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      processFile(e.target.files[0]);
+    }
+  };
+  
+  // Handler for when the user clicks the drop zone
+  const handleDropZoneClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Handler for when a file is dropped
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+  
+  // These handlers manage the visual state during a drag operation
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault(); // This is crucial to allow the 'drop' event
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  };
+  // ==========================================================================
+
+  // The handleSubmit function remains exactly the same...
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // REMOVED: Photo validation for new passes - now optional
     if (formData.areaAllowed.length === 0) { setError("At least one area must be selected."); return; }
 
     setIsLoading(true);
@@ -133,7 +175,6 @@ function AddPassPage() {
       }
     });
 
-    // Only append photo if one is selected
     if (photo) {
       submissionFormData.append('photo', photo);
     }
@@ -167,7 +208,7 @@ function AddPassPage() {
         setPhotoPreview(null);
       }
       
-    } catch (err: unknown) { // FIX 2: Type as 'unknown' and perform a type check
+    } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
       } else {
@@ -202,6 +243,7 @@ function AddPassPage() {
       {successMessage && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">{successMessage}</div>}
       
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* All other form fields remain the same */}
         <div>
           <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">Pass Category <span className="text-red-500">*</span></label>
           <select name="category" id="category" value={formData.category} onChange={handleInputChange} required className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
@@ -213,19 +255,7 @@ function AddPassPage() {
         {formFields.map(field => (
           <div key={field.name}>
             <label htmlFor={field.name} className="block text-sm font-medium text-gray-700 mb-1">{field.label} {field.required && <span className="text-red-500">*</span>}</label>
-            <input 
-              type={field.type} 
-              name={field.name} 
-              id={field.name} 
-              // FIX 3, Step 3: Use a safer type assertion than 'any'
-              value={formData[field.name as keyof typeof formData]} 
-              onChange={handleInputChange} 
-              required={field.required} 
-              placeholder={field.placeholder || ''} 
-              pattern={field.pattern} 
-              title={field.title} 
-              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
-            />
+            <input type={field.type} name={field.name} id={field.name} value={formData[field.name as keyof typeof formData]} onChange={handleInputChange} required={field.required} placeholder={field.placeholder || ''} pattern={field.pattern} title={field.title} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
           </div>
         ))}
 
@@ -240,28 +270,57 @@ function AddPassPage() {
             ))}
           </div>
         </div>
-
+        
+        {/* ===================== UPDATED PHOTO UPLOAD JSX ===================== */}
         <div>
-          <label htmlFor="photo" className="block text-sm font-medium text-gray-700 mb-1">
-            Photo 
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Photo
             <span className="text-gray-500 text-xs ml-1">(Optional - can be added later)</span>
           </label>
-          <input 
-            type="file" 
-            name="photo" 
-            id="photo" 
-            accept="image/*" 
-            onChange={handlePhotoChange} 
-            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
-          {photoPreview && (
-            <div className="mt-4">
-              <p className="text-sm text-gray-600">{isEditMode && !photo ? 'Current Photo:' : 'Preview:'}</p>
-              <Image src={photoPreview} alt="Preview" width={150} height={150} className="rounded mt-2 border object-cover" />
-            </div>
-          )}
+          
+          <div
+            onClick={handleDropZoneClick}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            className={`mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md cursor-pointer transition-colors duration-200
+              ${isDraggingOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
+              ${photoPreview ? 'border-solid' : ''}
+            `}
+          >
+            {/* 3. Hidden file input is now controlled by the ref */}
+            <input 
+              ref={fileInputRef}
+              type="file" 
+              name="photo" 
+              id="photo" 
+              accept="image/*" 
+              onChange={handlePhotoChange} 
+              className="hidden"
+            />
+            
+            {/* Show preview if it exists, otherwise show upload instructions */}
+            {photoPreview ? (
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-2">{isEditMode && !photo ? 'Current Photo:' : 'New Photo Preview:'}</p>
+                <Image src={photoPreview} alt="Preview" width={150} height={150} className="rounded-md mx-auto border object-cover" />
+                <p className="text-xs text-blue-600 mt-2">Click or drop a different image to replace</p>
+              </div>
+            ) : (
+              <div className="space-y-1 text-center">
+                <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                  <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <div className="flex text-sm text-gray-600">
+                  <p className="pl-1">Drag & drop an image here, or <span className="font-medium text-blue-600 hover:text-blue-500">click to upload</span></p>
+                </div>
+                <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+              </div>
+            )}
+          </div>
         </div>
-        
+        {/* ==================================================================== */}
+
         <button type="submit" disabled={isLoading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400">
           {isLoading ? 'Submitting...' : (isEditMode ? 'Update Pass' : 'Add Pass')}
         </button>

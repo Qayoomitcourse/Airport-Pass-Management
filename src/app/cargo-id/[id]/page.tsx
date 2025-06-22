@@ -11,7 +11,6 @@ import type { SanityImageSource } from '@sanity/image-url/lib/types/types';
 
 const PLACEHOLDER_AVATAR_URL = '/placeholder-avatar.png';
 
-// Extended type for employee details with optional properties
 interface EmployeeDetailsType {
   _id: string;
   _createdAt?: string;
@@ -59,13 +58,10 @@ function formatDateSafely(dateString: string | null | undefined): string {
 
 function LoadingSpinner() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-20 w-20 border-4 border-blue-200"></div>
-          <div className="animate-spin rounded-full h-20 w-20 border-4 border-blue-500 border-t-transparent absolute top-0"></div>
-        </div>
-        <p className="mt-4 text-gray-600 font-medium">Loading employee details...</p>
+        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading employee details...</p>
       </div>
     </div>
   );
@@ -73,30 +69,28 @@ function LoadingSpinner() {
 
 function ErrorMessage({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md mx-4">
-        <div className="text-center">
-          <div className="bg-red-100 rounded-full p-4 w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-            <svg className="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Oops! Something went wrong</h3>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              onClick={onRetry}
-              className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 transform hover:scale-105 font-medium"
-            >
-              Try Again
-            </button>
-            <Link
-              href="/database"
-              className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 transform hover:scale-105 font-medium"
-            >
-              Back to Database
-            </Link>
-          </div>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
+        </div>
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h3>
+        <p className="text-gray-600 mb-6">{error}</p>
+        <div className="flex gap-3 justify-center">
+          <button
+            onClick={onRetry}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            Try Again
+          </button>
+          <Link
+            href="/database"
+            className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+          >
+            Back to Database
+          </Link>
         </div>
       </div>
     </div>
@@ -107,70 +101,29 @@ function StatusBadge({ status, expiryDate }: { status?: string; expiryDate?: str
   const isExpired = expiryDate ? new Date(expiryDate) < new Date() : false;
   const actualStatus = isExpired ? 'expired' : (status || 'active');
   
-  const statusConfig = {
-    active: { 
-      bg: 'bg-gradient-to-r from-emerald-500 to-green-500', 
-      text: 'text-white',
-      icon: '✓'
-    },
-    expired: { 
-      bg: 'bg-gradient-to-r from-red-500 to-rose-500', 
-      text: 'text-white',
-      icon: '⚠'
-    },
-    pending: { 
-      bg: 'bg-gradient-to-r from-amber-500 to-orange-500', 
-      text: 'text-white',
-      icon: '⏳'
-    },
-    suspended: { 
-      bg: 'bg-gradient-to-r from-gray-500 to-slate-500', 
-      text: 'text-white',
-      icon: '⏸'
-    }
+  const statusStyles = {
+    active: 'bg-green-100 text-green-800 border-green-200',
+    expired: 'bg-red-100 text-red-800 border-red-200',
+    pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    suspended: 'bg-gray-100 text-gray-800 border-gray-200'
   };
 
-  const config = statusConfig[actualStatus as keyof typeof statusConfig] || statusConfig.pending;
+  const style = statusStyles[actualStatus as keyof typeof statusStyles] || statusStyles.pending;
 
   return (
-    <div className={`${config.bg} px-4 py-2 rounded-full shadow-lg flex items-center space-x-2`}>
-      <span className="text-sm">{config.icon}</span>
-      <span className={`font-semibold text-sm ${config.text}`}>
-        {actualStatus.charAt(0).toUpperCase() + actualStatus.slice(1)}
-      </span>
-    </div>
+    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${style}`}>
+      {actualStatus.charAt(0).toUpperCase() + actualStatus.slice(1)}
+    </span>
   );
 }
 
-function ExpiryDateBadge({ expiryDate }: { expiryDate?: string | null }) {
-  if (!expiryDate) return null;
-  
-  const isExpired = new Date(expiryDate) < new Date();
-  const formattedDate = formatDateSafely(expiryDate);
-  
-  if (formattedDate === 'N/A' || formattedDate === 'Invalid Date') return null;
-  
+function InfoCard({ title, children, icon }: { title: string; children: React.ReactNode; icon: string }) {
   return (
-    <div className={`px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 ${
-      isExpired 
-        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white' 
-        : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white'
-    }`}>
-      <span className="text-sm">{isExpired ? '⚠️' : '📅'}</span>
-      <span className="font-semibold text-sm">
-        {isExpired ? 'Expired: ' : 'Expires: '}{formattedDate}
-      </span>
-    </div>
-  );
-}
-
-function InfoCard({ title, children, icon }: { title: string; children: React.ReactNode; icon: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4">
-        <div className="flex items-center space-x-3">
-          <div className="text-white text-xl">{icon}</div>
-          <h3 className="text-lg font-bold text-white">{title}</h3>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <span className="text-lg">{icon}</span>
+          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         </div>
       </div>
       <div className="p-6">
@@ -182,11 +135,11 @@ function InfoCard({ title, children, icon }: { title: string; children: React.Re
 
 function InfoField({ label, value, mono = false }: { label: string; value: string | number; mono?: boolean }) {
   return (
-    <div className="group">
-      <label className="block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">
+    <div>
+      <label className="block text-sm font-medium text-gray-500 mb-1">
         {label}
       </label>
-      <p className={`text-lg text-gray-900 group-hover:text-blue-600 transition-colors ${mono ? 'font-mono bg-gray-50 px-3 py-1 rounded-lg border' : ''}`}>
+      <p className={`text-gray-900 ${mono ? 'font-mono text-sm bg-gray-50 px-3 py-2 rounded border' : 'font-medium'}`}>
         {value}
       </p>
     </div>
@@ -194,9 +147,6 @@ function InfoField({ label, value, mono = false }: { label: string; value: strin
 }
 
 export default function EmployeeDetailsPage() {
-  // --- FIX IS HERE ---
-  // Removed `data: session` because it was not being used.
-  // We only need `status` to check if the user is logged in.
   const { status: sessionStatus } = useSession();
   const router = useRouter();
   const pathname = usePathname();
@@ -254,186 +204,147 @@ export default function EmployeeDetailsPage() {
     return <ErrorMessage error="Employee not found" onRetry={fetchEmployeeDetails} />;
   }
 
+  const isExpired = employee.dateOfExpiry ? new Date(employee.dateOfExpiry) < new Date() : false;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-200 rounded-full opacity-20 animate-pulse"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-200 rounded-full opacity-20 animate-pulse delay-1000"></div>
-      </div>
-
-      <div className="relative z-10 py-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
-          <div className="mb-8">
-            <Link href="/database" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 group">
-              <div className="bg-blue-100 rounded-full p-2 mr-3 group-hover:bg-blue-200 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </div>
-              <span className="font-medium">Back to Database</span>
-            </Link>
-            
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-              <div>
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">Employee Pass Details</h1>
-                <div className="flex items-center space-x-3">
-                  <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full text-sm font-semibold">
-                    {pageType.charAt(0).toUpperCase() + pageType.slice(1)} Pass
-                  </span>
-                  <span className="text-gray-600 font-mono text-lg">
-                    #{String(employee.passId || employee._id).padStart(4, '0')}
-                  </span>
-                </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <Link href="/database" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-6 group">
+            <svg className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="font-medium">Back to Database</span>
+          </Link>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Employee Details</h1>
+              <div className="flex items-center gap-3">
+                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                  {pageType.charAt(0).toUpperCase() + pageType.slice(1)} Pass
+                </span>
+                <span className="text-gray-500 font-mono">
+                  #{String(employee.passId || employee._id).padStart(4, '0')}
+                </span>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Hero Card - Employee Photo and Basic Info */}
-          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden mb-8">
-            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 px-8 py-12 relative">
-              {/* Decorative elements */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full transform translate-x-16 -translate-y-16"></div>
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full transform -translate-x-12 translate-y-12"></div>
-              
-              <div className="relative z-10 flex flex-col lg:flex-row items-center lg:items-start space-y-6 lg:space-y-0 lg:space-x-12">
-                <div className="flex-shrink-0">
-                  <div className="relative">
-                    <Image
-                      src={getImageUrl(employee.photo)}
-                      alt={`${employee.name}'s photo`}
-                      width={180}
-                      height={180}
-                      className="rounded-3xl border-4 border-white shadow-2xl object-cover"
-                    />
-                    <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-2 shadow-lg">
-                      <div className="w-4 h-4 bg-green-500 rounded-full animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="text-white text-center lg:text-left flex-1">
-                  <h2 className="text-5xl font-bold mb-3 leading-tight">{employee.name}</h2>
-                  <p className="text-2xl font-medium text-blue-100 mb-2">{employee.designation}</p>
-                  <p className="text-xl text-blue-200 mb-6">{employee.organization}</p>
-                  
-                  <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start space-y-3 sm:space-y-0 sm:space-x-4">
-                    <StatusBadge status={employee.status} expiryDate={employee.dateOfExpiry} />
-                    <ExpiryDateBadge expiryDate={employee.dateOfExpiry} />
-                    <div className="bg-white bg-opacity-20 backdrop-blur-sm px-4 py-2 rounded-full">
-                      <span className="font-semibold text-sm">
-                        🎫 {employee.category?.charAt(0).toUpperCase() + employee.category?.slice(1)} Access
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Details Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            {/* Personal Information */}
-            <InfoCard 
-              title="Personal Information" 
-              icon={<span>👤</span>}
-            >
-              <div className="space-y-6">
-                <InfoField label="Full Name" value={employee.name} />
-                <InfoField label="CNIC Number" value={employee.cnic || 'N/A'} mono />
-              </div>
-            </InfoCard>
-
-            {/* Employment Information */}
-            <InfoCard 
-              title="Employment Details" 
-              icon={<span>💼</span>}
-            >
-              <div className="space-y-6">
-                <InfoField label="Designation" value={employee.designation} />
-                <InfoField label="Organization" value={employee.organization} />
-                <InfoField label="Employee ID" value={employee.passId?.toString() || 'N/A'} mono />
-              </div>
-            </InfoCard>
-
-            {/* Pass Information */}
-            <InfoCard 
-              title="Pass Information" 
-              icon={<span>🎫</span>}
-            >
-              <div className="space-y-6">
-                <InfoField 
-                  label="Pass ID" 
-                  value={String(employee.passId || employee._id).padStart(4, '0')} 
-                  mono 
+        {/* Main Profile Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-8 overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-12">
+            <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+              <div className="flex-shrink-0">
+                <Image
+                  src={getImageUrl(employee.photo)}
+                  alt={`${employee.name}'s photo`}
+                  width={160}
+                  height={160}
+                  className="rounded-full border-4 border-white shadow-lg object-cover"
                 />
-                <InfoField label="Pass Type" value={employee.category?.toUpperCase() || 'N/A'} />
-                <InfoField label="Date of Entry" value={formatDateSafely(employee.dateOfEntry)} />
-                <InfoField label="Date of Expiry" value={formatDateSafely(employee.dateOfExpiry)} />
               </div>
-            </InfoCard>
-
-            {/* Access Information */}
-            <InfoCard 
-              title="Access Permissions" 
-              icon={<span>🔐</span>}
-            >
-              <div>
-                <label className="block text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Authorized Areas
-                </label>
-                {employee.areaAllowed && employee.areaAllowed.length > 0 ? (
-                  <div className="flex flex-wrap gap-3">
-                    {employee.areaAllowed.map((area, index) => (
-                      <div
-                        key={index}
-                        className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg hover:shadow-xl transition-shadow duration-200"
-                      >
-                        📍 {area}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
-                    <p className="text-gray-500 font-medium">No specific areas assigned</p>
-                    <p className="text-sm text-gray-400 mt-1">Contact administrator for area permissions</p>
-                  </div>
-                )}
+              
+              <div className="text-white text-center md:text-left flex-1">
+                <h2 className="text-4xl font-bold mb-2">{employee.name}</h2>
+                <p className="text-xl text-blue-100 mb-1">{employee.designation}</p>
+                <p className="text-lg text-blue-200 mb-6">{employee.organization}</p>
+                
+                <div className="flex flex-wrap justify-center md:justify-start gap-3">
+                  <StatusBadge status={employee.status} expiryDate={employee.dateOfExpiry} />
+                  {employee.dateOfExpiry && (
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium border ${
+                      isExpired 
+                        ? 'bg-red-100 text-red-800 border-red-200' 
+                        : 'bg-white text-gray-800 border-gray-200'
+                    }`}>
+                      {isExpired ? 'Expired: ' : 'Expires: '}{formatDateSafely(employee.dateOfExpiry)}
+                    </span>
+                  )}
+                  <span className="px-3 py-1 bg-white bg-opacity-20 text-white rounded-full text-sm font-medium border border-white border-opacity-30">
+                    {employee.category?.charAt(0).toUpperCase() + employee.category?.slice(1)} Access
+                  </span>
+                </div>
               </div>
-            </InfoCard>
-          </div>
-
-          {/* System Information */}
-          <div className="bg-white rounded-2xl shadow-lg p-8">
-            <div className="flex items-center space-x-3 mb-6">
-              <div className="bg-gradient-to-r from-gray-500 to-slate-500 text-white rounded-lg p-2">
-                <span className="text-lg">⚙️</span>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">System Information</h3>
             </div>
-            
+          </div>
+        </div>
+
+        {/* Details Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Personal Information */}
+          <InfoCard title="Personal Information" icon="👤">
+            <div className="space-y-4">
+              <InfoField label="Full Name" value={employee.name} />
+              <InfoField label="CNIC Number" value={employee.cnic || 'N/A'} mono />
+            </div>
+          </InfoCard>
+
+          {/* Employment Information */}
+          <InfoCard title="Employment Details" icon="💼">
+            <div className="space-y-4">
+              <InfoField label="Designation" value={employee.designation} />
+              <InfoField label="Organization" value={employee.organization} />
+              <InfoField label="Employee ID" value={employee.passId?.toString() || 'N/A'} mono />
+            </div>
+          </InfoCard>
+
+          {/* Pass Information */}
+          <InfoCard title="Pass Information" icon="🎫">
+            <div className="space-y-4">
+              <InfoField 
+                label="Pass ID" 
+                value={String(employee.passId || employee._id).padStart(4, '0')} 
+                mono 
+              />
+              <InfoField label="Pass Type" value={employee.category?.toUpperCase() || 'N/A'} />
+              <InfoField label="Date of Entry" value={formatDateSafely(employee.dateOfEntry)} />
+              <InfoField label="Date of Expiry" value={formatDateSafely(employee.dateOfExpiry)} />
+            </div>
+          </InfoCard>
+
+          {/* Access Information */}
+          <InfoCard title="Access Permissions" icon="🔐">
+            <div>
+              <label className="block text-sm font-medium text-gray-500 mb-3">
+                Authorized Areas
+              </label>
+              {employee.areaAllowed && employee.areaAllowed.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {employee.areaAllowed.map((area, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
+                    >
+                      📍 {area}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
+                  <p className="text-gray-500 font-medium">No specific areas assigned</p>
+                  <p className="text-sm text-gray-400 mt-1">Contact administrator for area permissions</p>
+                </div>
+              )}
+            </div>
+          </InfoCard>
+        </div>
+
+        {/* System Information */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">⚙️</span>
+              <h3 className="text-lg font-semibold text-gray-900">System Information</h3>
+            </div>
+          </div>
+          <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-                <label className="block text-sm font-semibold text-blue-600 uppercase tracking-wide mb-2">
-                  Created By
-                </label>
-                <p className="text-gray-900 font-medium">{employee.author?.name || 'System'}</p>
-              </div>
-              
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
-                <label className="block text-sm font-semibold text-green-600 uppercase tracking-wide mb-2">
-                  Created Date
-                </label>
-                <p className="text-gray-900 font-medium">{formatDateSafely(employee._createdAt)}</p>
-              </div>
-              
-              <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-4 border border-purple-100">
-                <label className="block text-sm font-semibold text-purple-600 uppercase tracking-wide mb-2">
-                  Last Updated
-                </label>
-                <p className="text-gray-900 font-medium">{formatDateSafely(employee._updatedAt)}</p>
-              </div>
+              <InfoField label="Created By" value={employee.author?.name || 'System'} />
+              <InfoField label="Created Date" value={formatDateSafely(employee._createdAt)} />
+              <InfoField label="Last Updated" value={formatDateSafely(employee._updatedAt)} />
             </div>
           </div>
         </div>
