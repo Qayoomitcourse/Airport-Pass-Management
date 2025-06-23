@@ -256,4 +256,10 @@ body {
     grid-column: auto;
     grid-row: auto;
   }
+
+  /* ✅ ADDITION FOR BACK PAGE SHIFT (0.2 inches ≈ 5.08mm) */
+  .print-page.back-page {
+  padding-left: 31.27mm !important;  /* 30mm + 1.27mm */
+  padding-right: 28.73mm !important; /* 60mm total - 31.27mm */
+}
 }
