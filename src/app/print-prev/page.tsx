@@ -222,70 +222,86 @@ export default function PrintCardsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+const handleFetchCards = async (e: FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setError(null);
+  setSuccessMessage(null);
+  setEmployeesToPrint([]);
 
-  const handleFetchCards = async (e: FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setSuccessMessage(null);
-    setEmployeesToPrint([]);
+  const tokens = passIdsInput
+    .split(/[\s,]+/)
+    .filter(Boolean);
 
-    const rawIds = passIdsInput.split(/[\s,]+/).filter(id => id.trim() !== '');
-    const idSet = new Set(rawIds);
-    const uniqueIds = Array.from(idSet);
+  const expandedIds: string[] = [];
 
-    if (uniqueIds.length === 0) {
-      setError('Please enter at least one Pass ID.');
-      setLoading(false);
-      return;
-    }
-
-    if (uniqueIds.length > 6) {
-      setError('You can print a maximum of 6 cards at a time.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/get-passes-by-ids', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passIds: uniqueIds, category: category })
-      });
-
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || 'Failed to fetch card data.');
-      }
-
-      const { employees, notFoundIds, totalFound } = await response.json();
-
-      const uniqueEmployees: Employee[] = [];
-      const seenPassIds = new Set<string>();
-
-      for (const employee of employees) {
-        if (!seenPassIds.has(employee.passId)) {
-          uniqueEmployees.push(employee);
-          seenPassIds.add(employee.passId);
+  for (const token of tokens) {
+    if (token.includes('-')) {
+      const [start, end] = token.split('-').map(Number);
+      if (!isNaN(start) && !isNaN(end) && start <= end) {
+        for (let i = start; i <= end; i++) {
+          expandedIds.push(i.toString());
         }
+      } else {
+        setError(`Invalid range: "${token}"`);
+        setLoading(false);
+        return;
       }
-
-      setEmployeesToPrint(uniqueEmployees);
-
-      const categoryLabel = category === 'cargo' ? 'Cargo' : 'Landside';
-      setSuccessMessage(`Successfully loaded ${totalFound} ${categoryLabel} pass${totalFound !== 1 ? 'es' : ''}.`);
-
-      if (notFoundIds && notFoundIds.length > 0) {
-        setError(`Warning: The following Pass IDs were not found for the '${categoryLabel}' category: ${notFoundIds.join(', ')}`);
-      }
-
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+    } else if (!isNaN(Number(token))) {
+      expandedIds.push(token);
     }
-  };
+  }
+
+  const uniqueIds = Array.from(new Set(expandedIds));
+
+  if (uniqueIds.length === 0) {
+    setError('Please enter at least one valid Pass ID.');
+    setLoading(false);
+    return;
+  }
+
+  if (uniqueIds.length > 6) {
+    setError('You can print a maximum of 6 cards at a time.');
+    setLoading(false);
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/get-passes-by-ids', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passIds: uniqueIds, category })
+    });
+
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.error || 'Failed to fetch card data.');
+    }
+
+    const { employees, notFoundIds, totalFound } = await response.json();
+
+    const seenPassIds = new Set<string>();
+    const uniqueEmployees: Employee[] = employees.filter((emp: Employee) => {
+      const isNew = !seenPassIds.has(emp.passId);
+      seenPassIds.add(emp.passId);
+      return isNew;
+    });
+
+    setEmployeesToPrint(uniqueEmployees);
+
+    setSuccessMessage(`Successfully loaded ${totalFound} ${category === 'cargo' ? 'Cargo' : 'Landside'} pass${totalFound !== 1 ? 'es' : ''}.`);
+
+    if (notFoundIds?.length > 0) {
+      setError(`Warning: The following Pass IDs were not found for '${category}': ${notFoundIds.join(', ')}`);
+    }
+
+  } catch (err: unknown) {
+    setError(err instanceof Error ? err.message : 'Unknown error occurred.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleCategoryChange = (newCategory: 'cargo' | 'landside') => {
     setCategory(newCategory);
