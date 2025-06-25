@@ -1,94 +1,159 @@
-// /components/UserActions.tsx
-
 'use client';
 
-import { useState, FormEvent, Fragment } from 'react';
+import { useSession } from 'next-auth/react';
+import { useState, FormEvent } from 'react';
 
-// Define the user type to be passed as a prop
 type User = {
   _id: string;
   name: string;
+  email: string;
+  role: 'admin' | 'editor' | 'viewer';
   provider: 'github' | 'credentials';
 };
 
 export function UserActions({ user }: { user: User }) {
-  // State to control the modal
+  const { data: session } = useSession();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
-  
-  // State for API feedback
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  // Don't allow password reset for GitHub users
-  if (user.provider !== 'credentials') {
-    return <span className="text-xs text-gray-400">Social Login</span>;
-  }
-  
+  const isSuperAdmin = session?.user?.provider === 'github';
+  const isSelf = session?.user?.email === user.email;
+
   const handlePasswordReset = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError(null);
-    setSuccess(null);
+    setFeedback(null);
 
-    const response = await fetch('/api/admin/update-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user._id, newPassword }),
+    const res = await fetch('/api/admin/update-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user._id, newPassword }),
     });
 
-    const data = await response.json();
+    const data = await res.json();
+    setIsLoading(false);
 
-    if (!response.ok) {
-        setError(data.message || "Failed to update password.");
+    if (!res.ok) {
+      setFeedback({ type: 'error', message: data.message || 'Failed to reset password' });
     } else {
-        setSuccess(`Password for ${user.name} has been updated.`);
-        setNewPassword(''); // Clear password field
-        // Optionally close modal after a short delay
-        setTimeout(() => {
-            setIsModalOpen(false);
-            setSuccess(null);
-        }, 2000);
+      setFeedback({ type: 'success', message: `Password reset for ${user.name}` });
+      setNewPassword('');
+      setTimeout(() => {
+        setIsModalOpen(false);
+        setFeedback(null);
+      }, 2000);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (isSelf) {
+      alert('You cannot delete yourself.');
+      return;
     }
 
-    setIsLoading(false);
-  }
+    if (user.role === 'admin' && !isSuperAdmin) {
+      alert('Only social login (GitHub) admins can delete another admin.');
+      return;
+    }
+
+    const confirmed = confirm(`Are you sure you want to delete ${user.name}?`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'DELETE',
+        body: JSON.stringify({ userId: user._id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || 'Failed to delete user.');
+      } else {
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      alert('Error deleting user.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <>
-      <button
-        onClick={() => setIsModalOpen(true)}
-        className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-2 rounded"
-      >
-        Reset Password
-      </button>
+      {user.provider === 'credentials' ? (
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-2 rounded"
+          >
+            Reset Password
+          </button>
 
-      {/* The Modal */}
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-xs font-bold py-1 px-2 rounded border text-red-600 border-red-600 hover:bg-red-50"
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <span className="text-xs text-gray-400">Social Login</span>
+
+          {user.role === 'admin' && isSuperAdmin && !isSelf && (
+            <button
+              onClick={handleDelete}
+              className="text-xs font-bold py-1 px-2 rounded border text-red-600 border-red-600 hover:bg-red-50"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
+          )}
+        </div>
+      )}
+
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
-            <h3 className="text-lg font-bold mb-4">Reset Password for {user.name}</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg p-6 shadow-md w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Reset Password for {user.name}</h3>
             <form onSubmit={handlePasswordReset}>
-                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700">New Password</label>
-                <input
-                    type="password"
-                    id="newPassword"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-                    required
-                    minLength={8}
-                />
-                <div className="mt-6 flex justify-end space-x-3">
-                    <button type="button" onClick={() => setIsModalOpen(false)} className="bg-gray-200 text-gray-800 px-4 py-2 rounded">Cancel</button>
-                    <button type="submit" disabled={isLoading} className="bg-indigo-600 text-white px-4 py-2 rounded disabled:opacity-50">
-                        {isLoading ? 'Updating...' : 'Update Password'}
-                    </button>
-                </div>
+              <label className="block text-sm mb-1">New Password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                minLength={8}
+                className="w-full mb-4 px-3 py-2 border border-gray-300 rounded"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 bg-gray-100 text-gray-800 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded disabled:opacity-50"
+                >
+                  {isLoading ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
             </form>
-            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-            {success && <p className="text-green-600 text-sm mt-2">{success}</p>}
+            {feedback && (
+              <p className={`text-sm mt-3 ${feedback.type === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+                {feedback.message}
+              </p>
+            )}
           </div>
         </div>
       )}

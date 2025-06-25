@@ -12,30 +12,29 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-  name: 'email',
-  title: 'Email',
-  type: 'string',
-  validation: (Rule) =>
-    Rule.required()
-      .email()
-      .custom(async (email, context) => {
-        const client = context.getClient?.({ apiVersion: '2023-01-01' });
+      name: 'email',
+      title: 'Email',
+      type: 'string',
+      validation: (Rule) =>
+        Rule.required()
+          .email()
+          .custom(async (email, context) => {
+            const client = context.getClient?.({ apiVersion: '2023-01-01' });
 
-        // ✅ Defensive checks
-        if (!email || !client || !context.document || !context.document._id) {
-          return true; // Skip validation if required context is missing
-        }
+            if (!email || !client || !context.document || !context.document._id) {
+              return true;
+            }
 
-        const id = context.document._id;
+            const id = context.document._id;
 
-        const existingUser = await client.fetch(
-          `*[_type == "user" && email == $email && _id != $id][0]`,
-          { email, id }
-        );
+            const existingUser = await client.fetch(
+              `*[_type == "user" && email == $email && _id != $id][0]`,
+              { email, id }
+            );
 
-        return existingUser ? 'Email must be unique' : true;
-      }),
-}),
+            return existingUser ? 'Email must be unique' : true;
+          }),
+    }),
     defineField({
       name: 'image',
       title: 'Image',
@@ -70,6 +69,26 @@ export default defineType({
       type: 'string',
       readOnly: true,
       initialValue: 'credentials',
+    }),
+    // ✅ NEW FIELDS FOR PASSWORD RESET FLOW
+    defineField({
+      name: 'requiresPasswordChange',
+      title: 'Requires Password Change',
+      type: 'boolean',
+      initialValue: false,
+      hidden: true,
+    }),
+    defineField({
+      name: 'resetToken',
+      title: 'Password Reset Token',
+      type: 'string',
+      hidden: true,
+    }),
+    defineField({
+      name: 'resetTokenExpires',
+      title: 'Token Expiry',
+      type: 'datetime',
+      hidden: true,
     }),
   ],
 });

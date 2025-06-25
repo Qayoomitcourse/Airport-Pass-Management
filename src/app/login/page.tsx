@@ -1,4 +1,4 @@
-// /app/login/page.tsx
+// ✅ UPDATED: /app/login/page.tsx
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
@@ -41,7 +41,9 @@ function LoginForm() {
 
     setIsLoading(false);
 
-    if (result?.error) {
+    if (result?.error === 'RESET_PASSWORD_REQUIRED') {
+      router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+    } else if (result?.error) {
       setError(result.error);
     } else if (result?.ok) {
       router.push('/');
@@ -104,6 +106,12 @@ function LoginForm() {
             </button>
           </div>
         </form>
+
+        <p className="mt-4 text-sm text-center">
+          <a href="/forgot-password" className="text-blue-600 hover:underline">
+            Forgot password?
+          </a>
+        </p>
 
         <div className="my-6 flex items-center">
           <div className="flex-grow border-t border-gray-300"></div>

@@ -1,19 +1,17 @@
-import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/lib/auth'; // Update with your auth path
-import { NextStudio } from 'next-sanity/studio';
-import config from '../../../../sanity.config';
+import { authOptions } from '@/app/lib/auth';
+import { redirect } from 'next/navigation';
+import StudioWrapper from './StudioWrapper'; // ⬅️ Client component
 
-export const dynamic = 'force-static';
-export { metadata, viewport } from 'next-sanity/studio';
+export const dynamic = 'force-dynamic'; // Required for SSR compatibility
 
 export default async function StudioPage() {
   const session = await getServerSession(authOptions);
 
-  // 🔐 Only allow access to admin users
+  // Only admins can access Studio
   if (!session || session.user.role !== 'admin') {
     redirect('/login');
   }
 
-  return <NextStudio config={config} />;
+  return <StudioWrapper />;
 }
