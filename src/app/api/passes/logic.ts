@@ -1,5 +1,5 @@
 // /app/api/passes/logic.ts
-import { writeClient } from '@/sanity/lib/client'; // Use your write client
+import { writeClient } from '@/sanity/lib/client';
 import { PassCategory } from '@/app/types';
 
 /**
@@ -11,24 +11,28 @@ import { PassCategory } from '@/app/types';
  * @returns {Promise<number>} The next sequential pass ID as a number.
  */
 export async function getNextPassId(category: PassCategory): Promise<number> {
-  // Define the last manually issued ID for each category.
-  // The next one will be this number + 1.
   const baseIds: Record<PassCategory, number> = {
     cargo: 1038,
     landside: 46,
   };
 
-  // GROQ query to find the document with the highest numerical passId for the given category.
-  // This is the key change: order by the number value, not creation date.
-  const query = `*[_type == "employeePass" && category == $category] | order(passId desc) [0].passId`;
+  // Fetch ALL passIds for this category
+  const query = `*[_type == "employeePass" && category == $category].passId`;
   const params = { category };
 
-  // Fetch the highest passId from Sanity. It will be a number or null.
-  const highestExistingId = await writeClient.fetch<number | null>(query, params);
+  const allPassIds = await writeClient.fetch<string[]>(query, params, {
+    cache: 'no-store',
+  });
 
-  // Determine the next ID. It's the greater of the two possibilities (highest in DB or manual base) plus one.
-  // This correctly handles starting a new sequence and continuing an existing one.
-  const nextId = Math.max(highestExistingId ?? 0, baseIds[category]) + 1;
+  // Convert to numbers and find max
+  const numericIds = allPassIds
+    .map((id) => parseInt(id, 10))
+    .filter((n) => !isNaN(n));
+
+  const highestExistingId = numericIds.length > 0 ? Math.max(...numericIds) : 0;
+
+  // Next ID = greater of DB max or baseIds + 1
+  const nextId = Math.max(highestExistingId, baseIds[category]) + 1;
 
   return nextId;
 }
